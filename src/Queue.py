@@ -6,12 +6,17 @@ class CustomQueue:
     END_FLAG = '[END]'
 
     def __init__(self, qsize: int):
-        self.queue = Queue(maxsize=qsize)
+        try:
+            self.queue: Queue = Queue(maxsize=qsize)
+        except:
+            self.queue: Queue = Queue(maxsize=-1)
+            print(f'CustomQueue, maxsize exceed {qsize} -> {self.queue._maxsize}')
 
     def get(self, timeout=60):
         try:
             sample = self.queue.get(timeout=timeout)
         except:
+            print('timeout (get_next in out_queue)')
             sample = self.TIMEOUT_FLAG
         return sample
 
