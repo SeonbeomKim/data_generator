@@ -1,5 +1,4 @@
 import random
-import threading
 from abc import abstractmethod, ABCMeta
 from multiprocessing import Process
 from typing import Any, Iterable, List
@@ -10,12 +9,13 @@ from src.Queue import CustomQueue
 
 
 class AbstractDataGenerator(metaclass=ABCMeta):
-    def __init__(self, data: Iterable, n_process: int, qsize: int, repeat: bool):
+    def __init__(self, data: Iterable, n_process: int, qsize: int, repeat: bool, shuffle: bool):
         self.data = data
         self.n_process = n_process
         self.repeat = repeat
+        self.shuffle = shuffle
         self.out_queue: CustomQueue = CustomQueue(qsize=qsize)
-        self.in_queue: CustomQueue = CustomQueue(qsize=qsize)
+        self.in_queue: CustomQueue = CustomQueue(qsize=qsize * n_process)
         self.processors: List[Process] = []
 
     @abstractmethod
@@ -23,13 +23,13 @@ class AbstractDataGenerator(metaclass=ABCMeta):
         raise NotImplementedError
 
     def __enter__(self):
-        self.producer = Producer(queue=self.in_queue, repeat=self.repeat)
+        self.producer = Producer(queue=self.in_queue, repeat=self.repeat, shuffle=self.shuffle)
         self.producer.run(data=self.data)
         self.run()
 
     def __exit__(self, type, value, tb):
-        self.producer.terminate()
         self.terminate()
+        self.producer.terminate()
 
     def __call__(self):  # for tf.data.Dataset.from_generator
         with self:
@@ -97,25 +97,36 @@ class AbstractDataGenerator(metaclass=ABCMeta):
 
 
 class Producer:
-    def __init__(self, queue: CustomQueue, repeat: bool):
+    def __init__(self, queue: CustomQueue, repeat: bool, shuffle: bool):
         self.queue = queue
         self.repeat = repeat
-        self.thread = None
+        self.shuffle = shuffle
+        self.process = None
 
     def run(self, data: Iterable):
-        self.thread = threading.Thread(target=self.fill_queue, args=(data,))
-        self.thread.daemon = True
-        self.thread.start()
+        self.process = Process(target=self.fill_queue, args=(data,))
+        self.process.daemon = True
+        self.process.start()
+
+        print('  (%s)create process(pid: %d)' % (self.__class__.__name__, self.process.pid))
 
     def fill_queue(self, data: Iterable):
         try:
             while True:
-                for sample in data:
-                    if not sample:
-                        continue
-                    self.queue.put(sample)
+                try:
+                    if self.shuffle:
+                        random.shuffle(data)
 
-                if not self.repeat:
+                    for sample in data:
+                        if not sample:
+                            continue
+                        self.queue.put(sample)
+
+                    if not self.repeat:
+                        break
+
+                except Exception as e:
+                    print("Producer Error", e)
                     break
 
             self.queue.put_end_flag()
@@ -123,9 +134,16 @@ class Producer:
             pass
 
     def terminate(self):
-        assert self.thread is not None
+        assert self.process is not None
+
         self.queue.close()
-        self.thread.join()
+        process = self.process
+        print('  (%s)terminate process(pid: %d)' % (self.__class__.__name__, process.pid))
+
+        process.join(timeout=0.5)
+        if process.is_alive():
+            process.terminate()
+            process.join()
 
 
 if __name__ == '__main__':
@@ -133,10 +151,9 @@ if __name__ == '__main__':
         def preprocess(self, sample: int) -> int:
             return sample + 1
 
+    data = list(range(10))
 
-    data = range(10)
-
-    data_generator = DataGenerator(data=data, n_process=3, qsize=1000, repeat=False)
+    data_generator = DataGenerator(data=data, n_process=3, qsize=100000000, repeat=False, shuffle=True)
 
     for each in data_generator:
         print(each)
