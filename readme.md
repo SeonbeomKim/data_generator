@@ -8,9 +8,9 @@ if __name__ == '__main__':
         def preprocess(self, sample: int) -> int:
             return sample + 1
 
-    data = list(range(10))
+    data = range(10)
 
-    data_generator = DataGenerator(data=data, n_process=3, qsize=100000000, repeat=False, shuffle=True)
+    data_generator = DataGenerator(data=data, n_process=3, qsize=100000000, repeat=False, verbose=True)
 
     for each in data_generator:
         print(each)
@@ -23,15 +23,16 @@ CustomQueue, maxsize exceed 300000000 -> 32767
   (DataGenerator)create process(pid: 9269)
   (DataGenerator)create process(pid: 9270)
   (DataGenerator)create process(pid: 9271)
+1
+2
 3
-7
+4
+5
 6
+7
 8
 9
 10
-2
-4
-5
   (DataGenerator)terminate process(pid: 9271)
   (DataGenerator)terminate process(pid: 9270)
   (DataGenerator)terminate process(pid: 9269)
