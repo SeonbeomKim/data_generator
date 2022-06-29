@@ -16,7 +16,6 @@ class CustomQueue:
         try:
             sample = self.queue.get(timeout=timeout)
         except:
-            print('timeout (get_next in out_queue)')
             sample = self.TIMEOUT_FLAG
         return sample
 
